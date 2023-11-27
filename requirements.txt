@@ -1,0 +1,4 @@
+playwright
+playwright-stealth
+fake_useragent
+amazoncaptcha
