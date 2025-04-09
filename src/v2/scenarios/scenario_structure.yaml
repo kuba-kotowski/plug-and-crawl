@@ -1,0 +1,55 @@
+{
+    ":name": "scenario_structure",
+    ":root":
+        {
+            "fields":
+                [
+                    {
+                        "name": "name1",
+                        "selector": {
+                            "css": "selector1",
+                            "attribute": "attribute1"
+                        },
+                        "options": {
+                                "many": False, # if many, return list of values
+                                "required": True,
+                                "default": "default_value", # default value if not found
+                                "type": "str", # int, float, str, bool
+                                "regex": r'(\d+)', # get regex matching value (to be implemented)
+                            },
+                    },
+                ],
+        },
+    ":locators": [
+            {
+                "name": "name1", # idx_name1 column populated with 0,1,2... in output if not flattened, otherwise field name with list as value
+                "selector": {"css": "selector1"},
+                "options": {
+                        "required": True,
+                        "flatten": True, # flatten list of values
+                    },
+                "fields":
+                    [
+                        {
+                            "name": "name2",
+                            "options":
+                                {
+                                    "required": True,
+                                    "default": "default_value",
+                                    "type": "str",
+                                    "regex": r'(\d+)',
+                                },
+                            "selector": [{
+                                    "css": "selector1",
+                                    "attribute": "attribute1"
+                                },
+                                {
+                                    "css": "selector2",
+                                    "attribute": "attribute2"
+                                }
+                            ]
+                        },
+                    ],
+            },
+        ],
+}

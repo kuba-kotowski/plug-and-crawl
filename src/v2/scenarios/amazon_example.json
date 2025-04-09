@@ -1,0 +1,60 @@
+{
+    ":name": "amazon_product_card",
+    ":root": {
+        "fields": [
+            {
+                "name": "title",
+                "selector": {
+                    "css": "#productTitle",
+                    "attribute": "text"
+                },
+                "options": {
+                    "required": false,
+                    "type": "str"
+                }
+            },
+            {
+                "name": "price",
+                "selector": {
+                    "css": "[data-csa-c-slot-id='newAccordionRow_0'] span.reinventPriceAccordionT2 > span",
+                    "attribute": "text"
+                },
+                "options": {
+                    "default_value": 0,
+                    "type": "float"
+                }
+            }
+        ]
+    },
+    ":locators": [
+        {
+            "name": "related_products",
+            "selector": {"css": "#sp_detail .a-carousel-card"},
+            "options": {
+                "flatten": true
+            },
+            "fields": [
+                {
+                    "name": "title",
+                    "selector": {
+                        "css": "div > .a-link-normal[title]",
+                        "attribute": "text"
+                    },
+                    "options": {
+                        "type": "str"
+                    }
+                },
+                {
+                    "name": "price",
+                    "selector": {
+                        "css": ".a-price",
+                        "attribute": "text"
+                    },
+                    "options": {
+                        "type": "float"
+                    }
+                }
+            ]
+        }
+    ]
+}

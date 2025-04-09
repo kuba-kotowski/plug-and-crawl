@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from playwright.async_api import BrowserContext, Page, async_playwright
+from playwright.async_api import BrowserContext, Page, async_playwright, Locator
 from playwright_stealth import stealth_async
 from fake_useragent import UserAgent
 
@@ -42,11 +42,23 @@ class Webdriver:
         logger.info("New instance created")
         return instance
     
+    async def __aenter__(self):
+        self.async_pl = await async_playwright().start()
+        await self.playwright_init(self.async_pl)
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+        await self.browser.close()
+        await self.async_pl.stop()
+
+    async def new_context(self):
+        return await self.browser.new_context(**self.context_settings)
+
     async def new_page(self, context: BrowserContext=None, new_context: bool=False):
         if context:
             browser_context = context
         elif new_context:
-            browser_context = await self.browser.new_context(**self.context_settings)
+            browser_context = await self.new_context()
         else:
             browser_context = self.browser_context
         page = await browser_context.new_page()
@@ -57,13 +69,31 @@ class Webdriver:
     async def navigate_to(self, page: Page, url: str):
         await page.goto(url, wait_until="load")
 
+    async def page_waits_for_selector(self, page: Page, selector: str, timeout: int=1000, retry: int=2):
+        i = 0
+        while i < retry:
+            if await self.css_exists(page=page, selector=selector):
+                return True
+            else:
+                i+=1
+                logger.debug(f"Couldn't find {selector} on {page.url}")
+                if i == retry:
+                    return False
+                await self.sleep(page=page, sec=1)
+
     async def locate_one_element(self, page: Page, selector: str, attr: str=None):
         # find one element by selector within the page or in the provided container
-        # await page.wait_for_selector(selector, timeout=1000)
+        
+        # this method is used both for Page and Locator (Locator cannot wait for selector)
+        # if you see that elements within containers are not loaded yet, wait for them while navigating to the page
+        if type(page) == Page:
+            if not await self.page_waits_for_selector(page=page, selector=selector):
+                return None
+
         if not selector and attr:
             return await page.get_attribute(attr)
         elif attr=="text":
-            return await page.locator(selector).first.text_content(timeout=1000)
+            return await page.locator(selector).first.text_content(timeout=100)
         elif attr:
             return await page.locator(selector).first.get_attribute(attr, timeout=1000)
         else:
@@ -83,24 +113,30 @@ class Webdriver:
                 logger.error(e)
                 return None
 
+        # if only want to extract the attribute (probably page is then a Locator object, not a Page object)
+        if not selector and attr:
+            if type(page) == Locator:
+                return await page.get_attribute(attr)
+            else:
+                raise Exception("You need to provide a selector to extract elements from a page")
+        
         containers = page.locator(selector)
-        tasks = [get_attribute(containers.nth(i), attr) for i in range(await containers.count())]
-        return await asyncio.gather(*[task for task in tasks if task is not None])
+        get_attribute_tasks = [get_attribute(containers.nth(i), attr) for i in range(await containers.count())]
+        return await asyncio.gather(*[task for task in get_attribute_tasks if task is not None])
+
 
     async def get_one_field(self, page: Page, field_name: str, selector_string: str):
         # instruction = {field_name: selector_string}
-        # selector_string = "selector::attr" -> if more than one selector possible, separate them with "|"
+        # selector_string = "selector::attr" -> if more than one selector possible, separate them with "||"
         if selector_string == "{current_url}":
             return {field_name: page.url}
-        if selector_string.find("|") != -1:
-            multiple_selector_strings = selector_string.split("|")
-        else:
-            multiple_selector_strings = [selector_string]
+        multiple_selector_strings = selector_string.split("||")
         for selector_string in multiple_selector_strings:
             selector, attr = split_selector_string(selector_string=selector_string.strip())
-            try:
-                value = await self.locate_one_element(page=page, selector=selector, attr=attr)
-            except:
+            value = await self.locate_many_elements(page=page, selector=selector, attr=attr)
+            if value and len(value) == 1:
+                value = value[0]
+            elif not value:
                 value = None
             if value:
                 return {field_name: value}
@@ -145,10 +181,10 @@ class Webdriver:
         return await page.locator(selector).count() > 0
 
     async def multiple_click(self, page: Page, selector: str, max_n_times: int, sleep_time: float=1):
-        i = 1
-        if not max_n_times:
+        i = 0
+        if max_n_times is None:
             max_n_times = float("inf")
-        while i <= max_n_times:
+        while i < max_n_times:
             if await self.css_exists(page=page, selector=selector):
                 await self.click(page=page, selector=selector, timeout=3000)
                 await self.sleep(page=page, sec=sleep_time)

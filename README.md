@@ -12,4 +12,4 @@ playwright install
 ```
 
 # Getting started
-See `amazon.py` file with examplary usage.
+See `src/v2/run.py` file with examplary usage.
