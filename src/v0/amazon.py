@@ -6,8 +6,8 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from amazoncaptcha import AmazonCaptcha
 
-from src.v1.webdriver import Webdriver
-from src.v1.base_pipelines import PaginationPipeline, BasePipeline
+from src.v0.webdriver import Webdriver
+from src.v0.base_pipelines import PaginationPipeline, BasePipeline
 
 
 class AmazonListings(PaginationPipeline):

@@ -1,6 +1,5 @@
 from playwright.async_api import async_playwright, BrowserContext
 from playwright_stealth import stealth_async
-from fake_useragent import UserAgent
 from asyncio_pool import AioPool
 import inspect
 
@@ -10,22 +9,41 @@ from .CustomPage import CustomPage
 
 class BasePipelinesManager:
     # add custom class to handle page actions (clicks, scrolling etc.) + extracting fields
-    def __init__(self, pipelines, workers=3, *args, **kwargs) -> None:
+    def __init__(self, *args, **kwargs) -> None:
+        if kwargs.get('pipelines'):
+            self.pipelines = kwargs.get('pipelines')
         
-        if [pipeline for pipeline in pipelines if isinstance(pipeline, dict)]:
-            self.pipelines = [BasePipeline(scenario=scenario) for scenario in pipelines]
-        elif [pipeline for pipeline in pipelines if isinstance(pipeline, BasePipeline)]:
-            self.pipelines = pipelines
-        else:
-            raise Exception("Pipelines must be a list of dictionaries or BasePipeline instances.")
-        
-        self.workers = workers
+        if kwargs.get('workers'):
+            self.workers = kwargs.get('workers')
+
         self.output = []
     
+    def validate_pipelines(self):
+        if not hasattr(self, 'pipelines'):
+            raise Exception("Pipelines must be defined.")
+        
+        if not isinstance(self.pipelines, list):
+            self.pipelines = [self.pipelines]
+
+        if [pipeline for pipeline in self.pipelines if isinstance(pipeline, dict) or isinstance(pipeline, str)]:
+            self.pipelines = [BasePipeline(scenario=scenario) for scenario in self.pipelines]
+        elif [pipeline for pipeline in self.pipelines if isinstance(pipeline, BasePipeline)]:
+            pass
+        else:
+            raise Exception("Pipelines must be a list of dictionaries or BasePipeline instances.")
+
     async def run(self, input_data, headless=True, context_settings = {}) -> None:
+        self.validate_pipelines()
+
+        if not hasattr(self, 'workers'):
+            self.workers = 2
+
+        if isinstance(input_data, dict):
+            input_data = [input_data]
         
         if [input for input in input_data if not input or 'url' not in input]:
             raise Exception("Input data must be a list of non-empty dictionaries containing 'url' key.")
+        
         self.input_data = input_data
         
         async with async_playwright() as async_pl:
@@ -59,12 +77,25 @@ class BasePipelinesManager:
 
     async def handle_single_input(self, page: CustomPage, input_data: dict) -> None:
         page_output = input_data
-        # input_data=None because it's already in the top level dict (line above)
-        page_output.update({str(pipeline): await pipeline.run(page, input_data=None) for pipeline in self.pipelines})
+        
+        for pipeline in self.pipelines:
+            try:
+                # input_data=None because it's already in the top level dict (page_output)
+                pipeline_output = await pipeline.run(page, input_data=None)
+                page_output.update({str(pipeline): pipeline_output.copy()})
+                
+            except Exception as e:
+                # if any pipeline returned error, return the error
+                if hasattr(self, 'on_error'):
+                    self.on_error(input_data, e)
+                return {}
+        
+        self.output.append(page_output)
+        
         if hasattr(self, 'post_single_url'):
             # if save_one method is defined, save the output for one url
             self.post_single_url(page_output)
-        self.output.append(page_output)
+        
         return page_output
 
     async def handle_input_pool(self, input_data: dict):

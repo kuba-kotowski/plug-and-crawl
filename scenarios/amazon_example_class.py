@@ -1,12 +1,16 @@
-import os
 from amazoncaptcha import AmazonCaptcha
+import os
+import sys
 
-from .. import BasePipeline
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(ROOT_DIR)
+
+from src.plugandcrawl import BasePipeline
 
 
 class AmazonProductCardPipeline(BasePipeline):
     # path to the scenario file or can be a dict with the scenario itself (see below)
-    scenario = rf'{os.path.dirname(os.path.abspath(__file__))}/amazon_example.json'
+    scenario = rf'{ROOT_DIR}/scenarios/amazon_example.json'
     """
     scenario = {
         ":name": "amazon_product_card",

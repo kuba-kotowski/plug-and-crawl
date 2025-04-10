@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "plugandcrawl"
+version = "0.2.0"
+description = "A custom solution to setup scraping tasks fast and easy."
+readme = "README.md"
+authors = [
+    { name = "Jakub Kotowski", email = "jakub.kotowski97@gmail.com" }
+]
+dependencies = [
+    "playwright",
+    "asyncio-pool",
+    "python-dotenv"
+]

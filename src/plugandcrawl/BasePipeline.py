@@ -2,6 +2,8 @@ from datetime import datetime
 import json
 from typing import Union
 import re
+import os
+import uuid
 
 from .CustomPage import CustomPage
 
@@ -17,16 +19,19 @@ class BasePipeline:
 
     def __str__(self):
         if self.scenario:
-            return self.scenario.get(':name', 'BasePipeline')
+            return self.scenario.get(':name', f'UnnamedPipeline_{str(uuid.uuid4()).replace("-", "")[:7]}')
 
     def __init__(self, *args, **kwargs) -> None:
-        # HERE check the scenario and parse it
         if kwargs.get('scenario'):
             self.scenario = kwargs.get('scenario')
+
+    def parse_scenario(self):
         if not self.scenario:
             raise Exception("Scenario is required")
         
         if isinstance(self.scenario, str):
+            if not os.path.exists(self.scenario):
+                raise Exception(f"Scenario file {self.scenario} does not exist.")
             self.scenario = json.loads(open(self.scenario).read())
         
         self.root_fields = self.scenario.get(':root', {}).get('fields', [])
@@ -35,11 +40,12 @@ class BasePipeline:
     async def run(self, page: CustomPage, input_data: dict = None) -> Union[dict, list]:
         # HERE implement the logic for scraping the page and returning it for given input
         """Open page, prepare page, scrape fields, process fields, close page."""
-        
+        self.parse_scenario()
+
         self.input_data = input_data # for use in other methods
         self.page = page
         try:
-            await self.prepare_page()
+            await self.prepare_page(page)
             root_fields = await self.scrape_fields()
             if self.input_data:
                 root_fields.update(self.input_data)
@@ -51,8 +57,8 @@ class BasePipeline:
                 root_fields.update(locators)
                 return root_fields
         except Exception as e:
-            print(e)
-            return {**(self.input_data if self.input_data else {}), 'error': str(e)}
+            raise e
+            # return {**(self.input_data if self.input_data else {}), 'error': str(e)}
 
     def use_field_function(self, key: str, value: Union[str, list, dict]) -> Union[str, list, dict]:
         """Process a single field - if method process_{field_name} exists, use it, otherwise return value."""
@@ -99,13 +105,22 @@ class BasePipeline:
         else:
             raise Exception(f"Field type {field_type} not supported.")
 
-    async def prepare_page(self) -> None:
+    async def prepare_page(self, page) -> None:
         """Custom page preparation - clicking, scrolling etc."""
         pass
     
     def prepare_output(self, output: Union[dict, list]) -> Union[dict, list]:
         """Process output"""
         return output
+
+    @staticmethod
+    def validate_selector(name: str, selector: dict):
+        if not isinstance(selector, dict):
+            raise TypeError(f"Selector for field {name} must be a dict.")
+        if 'css' not in selector:
+            raise KeyError(f"Selector for field {name} must have 'css' key.")
+        if 'attribute' not in selector:
+            raise KeyError(f"Selector for field {name} must have 'attribute' key.")
 
     async def scrape_single_field(self, name, selector, root=None, **kwargs):
         """Scrape a single field."""
@@ -115,31 +130,23 @@ class BasePipeline:
         default = options.get('default', None)
         field_type = options.get('type', 'str')
 
-        # TODO: optimize this
-        if not many:
-            if isinstance(selector, list):
-                for s in selector:
-                    if not isinstance(s, dict) or not s.get('css') or not s.get('attribute'):
-                        raise Exception("Selector must be a dict with 'css' and 'attribute' keys.")
-                    field_value = await self.page.locate_one_element(s.get('css'), s.get('attribute'), root)
-                    if field_value:
-                        break
-            else:
-                if not isinstance(selector, dict) or not selector.get('css') or not selector.get('attribute'):
-                    raise Exception("Selector must be a dict with 'css' and 'attribute' keys.")
-                field_value = await self.page.locate_one_element(selector.get('css'), selector.get('attribute'), root)
-        else:
-            if isinstance(selector, list):
-                for s in selector:
-                    if not isinstance(s, dict) or not s.get('css') or not s.get('attribute'):
-                        raise Exception("Selector must be a dict with 'css' and 'attribute' keys.")
-                    field_value = await self.page.locate_all_elements(s.get('css'), s.get('attribute'), root)
-                    if field_value:
-                        break
-            else:
-                if not isinstance(selector, dict) or not selector.get('css') or not selector.get('attribute'):
-                    raise Exception("Selector must be a dict with 'css' and 'attribute' keys.")
-                field_value = await self.page.locate_all_elements(selector.get('css'), selector.get('attribute'), root)
+        f_locate = {
+            'many': self.page.locate_all_elements,
+            'one': self.page.locate_one_element,
+        }
+        if not isinstance(selector, list):
+            selector = [selector]
+        
+        if len(selector) > 1:
+            # decrease time needed to find element if there are multiple selectors
+            timeout = 10
+        else: 
+            timeout = 100
+        for s in selector:
+            self.validate_selector(name, s)
+            field_value = await f_locate['many' if many else 'one'](s.get('css'), s.get('attribute'), root, timeout=timeout)
+            if field_value:
+                break
         
         if not field_value:
             if required:
@@ -157,12 +164,15 @@ class BasePipeline:
         """Scrape a single locator."""
         
         selector = locator['selector']
+        
         if isinstance(selector, list):
             containers = []
             for s in selector:
                 containers += await self.page.locate_all_elements(s.get('css'), s.get('attribute'))
+        
         elif isinstance(selector, dict):
             containers = await self.page.locate_all_elements(selector.get('css'), selector.get('attribute'))
+        
         else:
             raise Exception("Locator's selector must be a list or dict.")
 

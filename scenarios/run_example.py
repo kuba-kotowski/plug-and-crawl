@@ -1,9 +1,12 @@
 import asyncio
 import os
 import json
-from datetime import datetime
+import sys
 
-from . import BasePipelinesManager
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(ROOT_DIR)
+
+from src.plugandcrawl import BasePipelinesManager
 
 """
 1) Specifying pipelines
@@ -16,13 +19,13 @@ direct_scenario = True
 if direct_scenario:
     # - Using direct scenario (ex. from json file / dict):
     
-    with open(rf'{os.path.dirname(os.path.abspath(__file__))}/scenarios/amazon_example.json', 'r', encoding='utf-8') as f:
+    with open(rf'{ROOT_DIR}/scenarios/amazon_example.json', 'r', encoding='utf-8') as f:
         amazon_example = json.load(f)
         pipelines=[amazon_example]
 else:
     # - Using class scenario (with scenario + additional methods):
     
-    from .scenarios.amazon_example_class import amazon_example_pipeline
+    from scenarios.amazon_example_class import amazon_example_pipeline
     pipelines = [amazon_example_pipeline]
 
 
