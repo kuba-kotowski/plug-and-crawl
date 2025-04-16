@@ -82,7 +82,7 @@ class BasePipelinesManager:
             try:
                 # input_data=None because it's already in the top level dict (page_output)
                 pipeline_output = await pipeline.run(page, input_data=None)
-                page_output.update({str(pipeline): pipeline_output.copy()})
+                page_output.update(**pipeline_output.copy())
                 
             except Exception as e:
                 # if any pipeline returned error, return the error
@@ -140,3 +140,6 @@ class BasePipelinesManager:
         self.validate_function(f, list)
         
         self.post_all_urls = f
+
+    def handle_default_storage(self):
+        pass

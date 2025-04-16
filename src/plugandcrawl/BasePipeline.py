@@ -52,7 +52,7 @@ class BasePipeline:
             locators = await self.scrape_locators()
             if isinstance(locators, list):
                 [locator.update(root_fields) for locator in locators]
-                return locators
+                return {str(self): locators}
             elif isinstance(locators, dict):
                 root_fields.update(locators)
                 return root_fields
