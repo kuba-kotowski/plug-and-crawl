@@ -43,13 +43,12 @@ class BasePipeline:
         self.parse_scenario()
 
         self.input_data = input_data # for use in other methods
-        self.page = page
         try:
             await self.prepare_page(page)
-            root_fields = await self.scrape_fields()
+            root_fields = await self.scrape_fields(page)
             if self.input_data:
                 root_fields.update(self.input_data)
-            locators = await self.scrape_locators()
+            locators = await self.scrape_locators(page)
             if isinstance(locators, list):
                 [locator.update(root_fields) for locator in locators]
                 return {str(self): locators}
@@ -122,7 +121,7 @@ class BasePipeline:
         if 'attribute' not in selector:
             raise KeyError(f"Selector for field {name} must have 'attribute' key.")
 
-    async def scrape_single_field(self, name, selector, root=None, **kwargs):
+    async def scrape_single_field(self, page, name, selector, root=None, **kwargs):
         """Scrape a single field."""
         options = kwargs.get('options', {})
         many = options.get('many', False)
@@ -131,8 +130,8 @@ class BasePipeline:
         field_type = options.get('type', 'str')
 
         f_locate = {
-            'many': self.page.locate_all_elements,
-            'one': self.page.locate_one_element,
+            'many': page.locate_all_elements,
+            'one': page.locate_one_element,
         }
         if not isinstance(selector, list):
             selector = [selector]
@@ -150,7 +149,7 @@ class BasePipeline:
         
         if not field_value:
             if required:
-                raise Exception(f"Field '{name}' not found in {self.page.url}")
+                raise Exception(f"Field '{name}' not found in {page.url}")
             else:
                 return default if default else [] if many else None
         else:
@@ -160,7 +159,7 @@ class BasePipeline:
             else:
                 return parsed_element
 
-    async def scrape_single_locator(self, locator: dict) -> dict:
+    async def scrape_single_locator(self, page, locator: dict) -> dict:
         """Scrape a single locator."""
         
         selector = locator['selector']
@@ -168,10 +167,10 @@ class BasePipeline:
         if isinstance(selector, list):
             containers = []
             for s in selector:
-                containers += await self.page.locate_all_elements(s.get('css'), s.get('attribute'))
+                containers += await page.locate_all_elements(s.get('css'), s.get('attribute'))
         
         elif isinstance(selector, dict):
-            containers = await self.page.locate_all_elements(selector.get('css'), selector.get('attribute'))
+            containers = await page.locate_all_elements(selector.get('css'), selector.get('attribute'))
         
         else:
             raise Exception("Locator's selector must be a list or dict.")
@@ -181,7 +180,7 @@ class BasePipeline:
             fields = {}
             for field in locator['fields']:
                 field_name = field['name']
-                field_value = await self.scrape_single_field(**field, root=container)
+                field_value = await self.scrape_single_field(**field, page=page, root=container)
                 fields[field_name] = field_value
             containers_fields.append(fields)
         flat = locator.get('options', {}).get('flat', False)
@@ -192,7 +191,7 @@ class BasePipeline:
         else:
             return {locator['name']: containers_fields}
 
-    async def scrape_locators(self) -> dict:
+    async def scrape_locators(self, page) -> dict:
         """Scrape locators."""
         """
         If both locators (flat & deep) are present, flat locators are assigned deep locators and returns list of flat locators.
@@ -200,7 +199,7 @@ class BasePipeline:
         locators_flat = []
         locators_deep = {}
         for locator in self.locators:
-            locator_ouput = await self.scrape_single_locator(locator)
+            locator_ouput = await self.scrape_single_locator(page, locator)
             if isinstance(locator_ouput, list):
                 locators_flat += locator_ouput
             elif isinstance(locator_ouput, dict):
@@ -214,12 +213,12 @@ class BasePipeline:
         else:
             return locators_deep
 
-    async def scrape_fields(self) -> dict:
+    async def scrape_fields(self, page) -> dict:
         """Scrape fields from the page."""
         fields = {}
         for field in self.root_fields:
             field_name = field['name']
-            field_value = await self.scrape_single_field(**field)
+            field_value = await self.scrape_single_field(**field, page=page)
             fields[field_name] = field_value
         return fields
     
