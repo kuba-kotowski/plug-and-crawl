@@ -86,9 +86,11 @@ class BasePipelinesManager:
                 
             except Exception as e:
                 # if any pipeline returned error, return the error
+                print(input_data['url'], str(pipeline), e)
                 if hasattr(self, 'on_error'):
-                    self.on_error(input_data, e)
-                return {}
+                    return self.on_error(input_data, e)
+                else:
+                    return {}
         
         self.output.append(page_output)
         
@@ -101,7 +103,7 @@ class BasePipelinesManager:
     async def handle_input_pool(self, input_data: dict):
         page = CustomPage(await self.context.new_page())
         await page.goto(input_data['url'])
-        await page.wait_for_load_state('domcontentloaded')
+        await page.wait_for_load_state('networkidle')
         await self.handle_single_input(page, input_data)
         await page.cleanup()
 
