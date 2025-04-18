@@ -86,11 +86,12 @@ class BasePipelinesManager:
                 
             except Exception as e:
                 # if any pipeline returned error, return the error
-                print(input_data['url'], str(pipeline), e)
+                print(input_data['url'], '|', str(pipeline), '|', e)
                 if hasattr(self, 'on_error'):
-                    return self.on_error(input_data, e)
-                else:
-                    return {}
+                    on_error = self.on_error(input_data, e)
+                    if on_error:
+                        return on_error
+                return {}
         
         self.output.append(page_output)
         
