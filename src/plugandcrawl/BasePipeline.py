@@ -18,43 +18,61 @@ class BasePipeline:
     scenario = None # path to scenario file or dict
 
     def __str__(self):
-        if self.scenario:
-            return self.scenario.get(':name', f'UnnamedPipeline_{str(uuid.uuid4()).replace("-", "")[:7]}')
+        if isinstance(self.scenario, dict):
+            return self.scenario.get(':name', f'UnnamedPipeline_{self._id}')
+        
+        return f'UnnamedPipeline_{self._id}'
 
-    def __init__(self, *args, **kwargs) -> None:
-        if kwargs.get('scenario'):
-            self.scenario = kwargs.get('scenario')
+    def __init__(self, scenario=None, *args, **kwargs) -> None:
+        self._id = str(uuid.uuid4()).replace("-", "")[:7]
+        
+        if scenario and (isinstance(scenario, str) or isinstance(scenario, dict)):
+            self.scenario = scenario
 
-    def parse_scenario(self):
+    @classmethod
+    def from_json(cls, json_file: str):
+        return cls(scenario=json_file)
+
+    @staticmethod
+    def _load_scenario_from_file(path):
+        if not os.path.exists(path):
+            raise Exception(f"File {path} does not exist.")
+        with open(path) as f:
+            return json.load(f)
+
+    def parse_scenario(self) -> None:
         if not self.scenario:
-            raise Exception("Scenario is required")
+            raise Exception("Scenario is required at the execution time.")
         
         if isinstance(self.scenario, str):
-            if not os.path.exists(self.scenario):
-                raise Exception(f"Scenario file {self.scenario} does not exist.")
-            self.scenario = json.loads(open(self.scenario).read())
-        
+            self.scenario = self._load_scenario_from_file(self.scenario)
+
         self.root_fields = self.scenario.get(':root', {}).get('fields', [])
         self.locators = self.scenario.get(':locators', [])
 
     async def run(self, page: CustomPage, input_data: dict = None) -> Union[dict, list]:
         # HERE implement the logic for scraping the page and returning it for given input
         """Open page, prepare page, scrape fields, process fields, close page."""
+        
         self.parse_scenario()
 
         self.input_data = input_data # for use in other methods
         try:
             await self.prepare_page(page)
-            root_fields = await self.scrape_fields(page)
+            
+            self.root_fields = await self.scrape_fields(page)
             if self.input_data:
-                root_fields.update(self.input_data)
+                self.root_fields.update(self.input_data.copy())
+            
             locators = await self.scrape_locators(page)
             if isinstance(locators, list):
-                [locator.update(root_fields) for locator in locators]
+                for locator in locators:
+                    locator.update(self.root_fields)
                 return {str(self): locators}
             elif isinstance(locators, dict):
-                root_fields.update(locators)
-                return root_fields
+                self.root_fields.update(locators)
+                return self.root_fields
+        
         except Exception as e:
             raise e
             # return {**(self.input_data if self.input_data else {}), 'error': str(e)}
