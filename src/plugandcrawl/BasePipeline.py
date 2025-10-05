@@ -61,45 +61,77 @@ class BasePipeline:
             # return {**(self.input_data if self.input_data else {}), 'error': str(e)}
 
     def use_field_function(self, key: str, value: Union[str, list, dict]) -> Union[str, list, dict]:
-        """Process a single field - if method process_{field_name} exists, use it, otherwise return value."""
+        """
+        Process a single field value:
+        - list: if method process_{field_name}__element exists, use it for each element, then if method process_{field_name} exists, use it for the whole list, otherwise return list.
+        - single value: if method process_{field_name} exists, use it, otherwise return value.
+        """
+        if isinstance(value, list):
+            l = value
+            try:
+                if f"process_{key}__element" in dir(self):
+                    l = [getattr(self, f"process_{key}__element")(v) for v in l]
+                if f"process_{key}" in dir(self):
+                    l = getattr(self, f"process_{key}")(l)
+                return l
+            except Exception as e:
+                print(f"Error processing field {key}: {e}")
+                return value
+
         if f"process_{key}" in dir(self):
             try:
-                if isinstance(value, list):
-                    return [getattr(self, f"process_{key}")(v) for v in value]
-                else:
-                    return getattr(self, f"process_{key}")(value)
+                return getattr(self, f"process_{key}")(value)
             except Exception as e:
-                print(f"Error processing field {key}: {e} ({self.url})")
+                print(f"Error processing field {key}: {e}")
                 return value
         else:
             return value
     
-    def convert_field_to_type(self, value: Union[str, list, dict], field_type: str) -> Union[str, list, dict]:
+    @staticmethod
+    def to_int(v: str) -> Union[int, None]:
+        find_int = r'(\d+)'
+        result = re.findall(find_int, v)
+        if result:
+            return int(result[0])
+        else:
+            return None
+
+    @staticmethod
+    def to_float(v: str) -> Union[float, None]:
+        find_float = r'(\d+\.\d+)'
+        result = re.findall(find_float, v)
+        if result:
+            return float(result[0])
+        else:
+            return None
+
+    @staticmethod
+    def to_datetime(v: str, fmt: str = '%d.%m.%Y %H:%M') -> Union[datetime, None]:
+        try:
+            return datetime.strptime(v, fmt)
+        except ValueError:
+            return None
+
+    def convert_field_to_type(self, value: Union[str, list], field_type: str) -> Union[str, list, dict]:
         """Convert field to specified type."""
         if isinstance(value, list):
             return [self.convert_field_to_type(v, field_type) for v in value]
         
         if field_type == 'str':
             return str(value).strip()
+        
         elif field_type == 'int':
-            find_int = r'(\d+)'
-            result = re.findall(find_int, value)
-            if result:
-                return int(result[0])
-            else:
-                return None
+            return self.to_int(value)
+
         elif field_type == 'float':
-            value = str(value).replace(',', '.')
-            find_float = r'(\d+\.\d+)'
-            result = re.findall(find_float, value)
-            if result:
-                return float(result[0])
-            else:
-                return None
+            return self.to_float(value)
+        
         elif field_type == 'bool':
             return bool(value)
+        
         elif field_type == 'datetime':
-            return datetime.strptime(value, '%d.%m.%Y %H:%M')
+            return self.to_datetime(value)
+        
         # elif field_type == 'date':
         #     return datetime.strptime(value, '%Y.%m.%d')
         else:
