@@ -90,11 +90,11 @@ class BasePipeline:
         if isinstance(value, list):
             l = value
             try:
-                if func_el and inspect.isawaitable(func_el):
+                if func_el and inspect.iscoroutinefunction(func_el):
                     l = [await func_el(v) for v in l]
                 elif func_el:
                     l = [func_el(v) for v in l]
-                if func and inspect.isawaitable(func):
+                if func and inspect.iscoroutinefunction(func):
                     l = await func(l)
                 elif func:
                     l = func(l)
@@ -105,7 +105,7 @@ class BasePipeline:
 
         if func:
             try:
-                if inspect.isawaitable(func):
+                if inspect.iscoroutinefunction(func):
                     return await func(value)
                 else:
                     return func(value)
