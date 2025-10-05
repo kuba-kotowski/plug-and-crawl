@@ -123,6 +123,15 @@ class BasePipeline:
             return None
 
     @staticmethod
+    def to_json(v: str) -> Union[dict, None]:
+        if isinstance(v, dict):
+            return v
+        try:
+            return json.loads(v)
+        except json.JSONDecodeError:
+            return None
+
+    @staticmethod
     def to_datetime(v: str, fmt: str = '%d.%m.%Y %H:%M') -> Union[datetime, None]:
         try:
             return datetime.strptime(v, fmt)
@@ -146,6 +155,9 @@ class BasePipeline:
         elif field_type == 'bool':
             return bool(value)
         
+        elif field_type == 'json':
+            return self.to_json(value)
+
         elif field_type == 'datetime':
             return self.to_datetime(value)
         
