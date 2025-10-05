@@ -25,12 +25,14 @@ class BasePipelinesManager:
         if not isinstance(self.pipelines, list):
             self.pipelines = [self.pipelines]
 
-        if [pipeline for pipeline in self.pipelines if isinstance(pipeline, dict) or isinstance(pipeline, str)]:
+        if all(isinstance(pipeline, dict) for pipeline in self.pipelines):
             self.pipelines = [BasePipeline(scenario=scenario) for scenario in self.pipelines]
-        elif [pipeline for pipeline in self.pipelines if isinstance(pipeline, BasePipeline)]:
-            pass
-        else:
-            raise Exception("Pipelines must be a list of dictionaries or BasePipeline instances.")
+        
+        elif all(isinstance(pipeline, str) for pipeline in self.pipelines):
+            self.pipelines = [BasePipeline.from_json(scenario) for scenario in self.pipelines]
+        
+        elif not all(isinstance(pipeline, BasePipeline) for pipeline in self.pipelines):
+            raise Exception("Pipelines must be either a list of dictionaries, json files or BasePipeline instances.")
 
     async def run(self, input_data, headless=True, context_settings = {}) -> None:
         self.validate_pipelines()
@@ -82,12 +84,15 @@ class BasePipelinesManager:
             try:
                 # input_data=None because it's already in the top level dict (page_output)
                 pipeline_output = await pipeline.run(page, input_data=None)
-                page_output.update({str(pipeline): pipeline_output.copy()})
+                page_output.update(**pipeline_output.copy())
                 
             except Exception as e:
                 # if any pipeline returned error, return the error
+                print(input_data['url'], '|', str(pipeline), '|', e)
                 if hasattr(self, 'on_error'):
-                    self.on_error(input_data, e)
+                    on_error = self.on_error(input_data, e)
+                    if on_error:
+                        return on_error
                 return {}
         
         self.output.append(page_output)
@@ -101,7 +106,7 @@ class BasePipelinesManager:
     async def handle_input_pool(self, input_data: dict):
         page = CustomPage(await self.context.new_page())
         await page.goto(input_data['url'])
-        await page.wait_for_load_state('domcontentloaded')
+        await page.wait_for_load_state('networkidle')
         await self.handle_single_input(page, input_data)
         await page.cleanup()
 
@@ -140,3 +145,6 @@ class BasePipelinesManager:
         self.validate_function(f, list)
         
         self.post_all_urls = f
+
+    def handle_default_storage(self):
+        pass
