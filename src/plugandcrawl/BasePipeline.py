@@ -4,6 +4,7 @@ from typing import Union
 import re
 import os
 import uuid
+import inspect
 
 from .CustomPage import CustomPage
 
@@ -77,27 +78,37 @@ class BasePipeline:
             raise e
             # return {**(self.input_data if self.input_data else {}), 'error': str(e)}
 
-    def use_field_function(self, key: str, value: Union[str, list, dict]) -> Union[str, list, dict]:
+    async def use_field_function(self, key: str, value: Union[str, list, dict]) -> Union[str, list, dict]:
         """
         Process a single field value:
         - list: if method process_{field_name}__element exists, use it for each element, then if method process_{field_name} exists, use it for the whole list, otherwise return list.
         - single value: if method process_{field_name} exists, use it, otherwise return value.
         """
+        func_el = getattr(self, f"process_{key}__element", None)
+        func = getattr(self, f"process_{key}", None)
+
         if isinstance(value, list):
             l = value
             try:
-                if f"process_{key}__element" in dir(self):
-                    l = [getattr(self, f"process_{key}__element")(v) for v in l]
-                if f"process_{key}" in dir(self):
-                    l = getattr(self, f"process_{key}")(l)
+                if func_el and inspect.isawaitable(func_el):
+                    l = [await func_el(v) for v in l]
+                elif func_el:
+                    l = [func_el(v) for v in l]
+                if func and inspect.isawaitable(func):
+                    l = await func(l)
+                elif func:
+                    l = func(l)
                 return l
             except Exception as e:
                 print(f"Error processing field {key}: {e}")
                 return value
 
-        if f"process_{key}" in dir(self):
+        if func:
             try:
-                return getattr(self, f"process_{key}")(value)
+                if inspect.isawaitable(func):
+                    return await func(value)
+                else:
+                    return func(value)
             except Exception as e:
                 print(f"Error processing field {key}: {e}")
                 return value
@@ -161,6 +172,12 @@ class BasePipeline:
         elif field_type == 'datetime':
             return self.to_datetime(value)
         
+        elif field_type == 'locator':
+            if CustomPage.is_locator(value):
+                return value
+            else:
+                raise Exception(f"Value is not a Locator instance: {value}")
+        
         # elif field_type == 'date':
         #     return datetime.strptime(value, '%Y.%m.%d')
         else:
@@ -215,7 +232,7 @@ class BasePipeline:
             else:
                 return default if default else [] if many else None
         else:
-            parsed_element = self.use_field_function(name, field_value)
+            parsed_element = await self.use_field_function(name, field_value)
             if field_type:
                 return self.convert_field_to_type(parsed_element, field_type)
             else:
