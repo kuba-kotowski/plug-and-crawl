@@ -12,4 +12,4 @@ playwright install
 ```
 
 # Getting started
-See `scenarios/run_example.py` file with examplary usage.
+See `docs/run_example.py` file with examplary usage.

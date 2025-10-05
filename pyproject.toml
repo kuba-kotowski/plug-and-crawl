@@ -12,7 +12,7 @@ authors = [
 ]
 dependencies = [
     "playwright",
-    "playwright-stealh",
+    "playwright-stealth",
     "asyncio-pool",
     "python-dotenv"
 ]
