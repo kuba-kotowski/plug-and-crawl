@@ -1,4 +1,4 @@
-from playwright.async_api import Page
+from playwright.async_api import Page, Locator
 import asyncio
 
 
@@ -9,6 +9,10 @@ class CustomPage:
     def __getattr__(self, name):
         # Delegate attribute access to the Page instance
         return getattr(self.page, name)
+
+    @classmethod
+    def is_locator(cls, obj):
+        return isinstance(obj, Locator)
 
     async def cleanup(self):
         await self.page.close()
