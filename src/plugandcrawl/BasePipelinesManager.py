@@ -87,19 +87,21 @@ class BasePipelinesManager:
                 page_output.update(**pipeline_output.copy())
                 
             except Exception as e:
-                # if any pipeline returned error, return the error
-                print(input_data['url'], '|', str(pipeline), '|', e)
                 if hasattr(self, 'on_error'):
-                    on_error = self.on_error(input_data, e)
+                    on_error = self.on_error(e, {'row': input_data, 'catch': str(pipeline)})
                     if on_error:
-                        return on_error
-                return {}
-        
+                        page_output.update({str(pipeline): on_error})
+                        continue
+
+                page_output.update({str(pipeline): str(e)})
+
         self.output.append(page_output)
         
         if hasattr(self, 'post_single_url'):
-            # if save_one method is defined, save the output for one url
-            self.post_single_url(page_output)
+            try:
+                self.post_single_url(page_output)
+            except Exception as e:
+                print(f"Couldn't apply post_single_url function to output of {input_data['url']}: {e}")
         
         return page_output
 
