@@ -88,10 +88,9 @@ class BasePipelinesManager:
                 
             except Exception as e:
                 if hasattr(self, 'on_error'):
-                    on_error = self.on_error(e, {'row': input_data, 'catch': str(pipeline)})
-                    if on_error:
-                        page_output.update({str(pipeline): on_error})
-                        continue
+                    on_error = self.on_error(e, {'row': input_data, 'pipeline': str(pipeline)})
+                    if not on_error:
+                        raise e
 
                 page_output.update({str(pipeline): str(e)})
 
